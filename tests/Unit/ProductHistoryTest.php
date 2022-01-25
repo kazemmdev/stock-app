@@ -2,10 +2,14 @@
 
 namespace Tests\Unit;
 
-use App\Models\History;
-use App\Models\Stock;
+use App\Clients\StockResponse;
+use App\Models\Product;
+use App\Models\User;
+use App\Notifications\ImportantStockUpdate;
 use Database\Seeders\RetailerWithProductSeeder;
+use Facades\App\Clients\ClientFactory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
 class ProductHistoryTest extends TestCase
@@ -17,20 +21,57 @@ class ProductHistoryTest extends TestCase
     {
         $this->seed(RetailerWithProductSeeder::class);
 
-        \Http::fake(fn() => ['salePrice' => 299, 'onlineAvailability' => true]);
+//        \Http::fake(fn() => ['salePrice' => 99, 'onlineAvailability' => true]);
 
-        $this->assertEquals(0, History::count());
+        ClientFactory::shouldReceive('make->checkAvailability')
+            ->andReturn(new StockResponse($available = true, $price = 99));
 
-        $stock = tap(Stock::first())->track();
+        $product = tap(Product::first(), function ($product) {
 
-        $this->assertEquals(1, History::count());
+            $this->assertCount(0, $product->history);
 
-        $history = History::first();
+            $product->track();
 
-        $this->assertEquals($stock->price, $history->price);
-        $this->assertEquals($stock->in_stock, $history->in_stock);
-        $this->assertEquals($stock->product_id, $history->product_id);
-        $this->assertEquals($stock->id, $history->stock_id);
+            $this->assertCount(1, $product->refresh()->history);
+
+        });
+
+        $history = $product->history()->first();
+
+        $this->assertEquals($price, $history->price);
+        $this->assertEquals($available, $history->in_stock);
+        $this->assertEquals($product->id, $history->product_id);
+        $this->assertEquals($product->stock[0]->id, $history->stock_id);
+    }
+
+    /** @test */
+    public function it_notifies_the_user_when_the_stock_available()
+    {
+        Notification::fake();
+
+        $this->seed(RetailerWithProductSeeder::class);
+
+        ClientFactory::shouldReceive('make->checkAvailability')
+            ->andReturn(new StockResponse($available = true, $price = 99));
+
+        $this->artisan('track');
+
+        Notification::assertSentTo(User::first(), ImportantStockUpdate::class);
+    }
+
+    /** @test */
+    public function it_does_not_notifies_the_user_when_the_stock_remain_unavailable()
+    {
+        Notification::fake();
+
+        $this->seed(RetailerWithProductSeeder::class);
+
+        ClientFactory::shouldReceive('make->checkAvailability')
+            ->andReturn(new StockResponse($available = false, $price = 99));
+
+        $this->artisan('track');
+
+        Notification::assertNothingSent();
     }
 
 }

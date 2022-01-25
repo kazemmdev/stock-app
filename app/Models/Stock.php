@@ -2,10 +2,10 @@
 
 namespace App\Models;
 
+use App\Events\NowInStock;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Stock extends Model
 {
@@ -17,13 +17,17 @@ class Stock extends Model
         'in_stock' => 'boolean'
     ];
 
-    public function track()
+    public function track($callback = null)
     {
         $response = $this->retailer->client()->checkAvailability($this);
 
+        if (!$this->in_stock && $response->available) {
+            event(new NowInStock($this));
+        }
+
         $this->update(['in_stock' => $response->available, 'price' => $response->price]);
 
-        $this->recordHistory();
+        $callback && $callback($this);
     }
 
     public function retailer(): BelongsTo
@@ -31,17 +35,9 @@ class Stock extends Model
         return $this->belongsTo(Retailer::class);
     }
 
-    public function histories(): HasMany
+    public function product(): BelongsTo
     {
-        return $this->hasMany(History::class);
+        return $this->belongsTo(Product::class);
     }
 
-    protected function recordHistory(): void
-    {
-        $this->histories()->create([
-            'price' => $this->price,
-            'in_stock' => $this->in_stock,
-            'product_id' => $this->product_id,
-        ]);
-    }
 }
