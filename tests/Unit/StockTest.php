@@ -32,19 +32,7 @@ class StockTest extends TestCase
     {
         $this->seed(RetailerWithProductSeeder::class);
 
-//        ClientFactory::shouldReceive('make')->andReturn(new class implements Client {
-//            public function checkAvailability(Stock $stock): StockResponse
-//            {
-//                return new StockResponse(true, 9900);
-//            }
-//        });
-
-//        $clientMock = Mockery::mock(Client::class);
-//        $clientMock->allows('checkAvailability')->andReturns(new StockResponse(true, 9900));
-//
-//        ClientFactory::shouldReceive('make')->andReturn($clientMock);
-
-        ClientFactory::shouldReceive('make->checkAvailability')->andReturn(new StockResponse(true, 9900));
+        $this->mockClientFactory(true, 9900);
 
         $stock = tap(Stock::first())->track();
 

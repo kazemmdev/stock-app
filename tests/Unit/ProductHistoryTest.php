@@ -2,12 +2,10 @@
 
 namespace Tests\Unit;
 
-use App\Clients\StockResponse;
 use App\Models\Product;
 use App\Models\User;
 use App\Notifications\ImportantStockUpdate;
 use Database\Seeders\RetailerWithProductSeeder;
-use Facades\App\Clients\ClientFactory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
@@ -16,15 +14,19 @@ class ProductHistoryTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        Notification::fake();
+
+        $this->seed(RetailerWithProductSeeder::class);
+    }
+
     /** @test */
     public function it_can_records_history_on_tracking_product()
     {
-        $this->seed(RetailerWithProductSeeder::class);
-
-//        \Http::fake(fn() => ['salePrice' => 99, 'onlineAvailability' => true]);
-
-        ClientFactory::shouldReceive('make->checkAvailability')
-            ->andReturn(new StockResponse($available = true, $price = 99));
+        $this->mockClientFactory($available = true, $price = 2990);
 
         $product = tap(Product::first(), function ($product) {
 
@@ -47,12 +49,7 @@ class ProductHistoryTest extends TestCase
     /** @test */
     public function it_notifies_the_user_when_the_stock_available()
     {
-        Notification::fake();
-
-        $this->seed(RetailerWithProductSeeder::class);
-
-        ClientFactory::shouldReceive('make->checkAvailability')
-            ->andReturn(new StockResponse($available = true, $price = 99));
+        $this->mockClientFactory();
 
         $this->artisan('track');
 
@@ -62,12 +59,7 @@ class ProductHistoryTest extends TestCase
     /** @test */
     public function it_does_not_notifies_the_user_when_the_stock_remain_unavailable()
     {
-        Notification::fake();
-
-        $this->seed(RetailerWithProductSeeder::class);
-
-        ClientFactory::shouldReceive('make->checkAvailability')
-            ->andReturn(new StockResponse($available = false, $price = 99));
+        $this->mockClientFactory(false);
 
         $this->artisan('track');
 
